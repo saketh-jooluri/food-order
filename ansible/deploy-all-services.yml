@@ -1,0 +1,101 @@
+---
+- name: Deploy FoodOrder Microservices Platform
+  hosts: localhost
+  gather_facts: true
+  vars:
+    namespace: food-app
+    dockerhub_username: sakethjooluri
+    
+  tasks:
+    - name: Create Food App namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ namespace }}"
+    
+    # Common Resources (DB, Redis) from Payment Service (where they are defined)
+    - name: Deploy PostgreSQL
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+        namespace: "{{ namespace }}"
+      loop:
+        - ../payment-service/k8s/postgres.yaml
+    
+    - name: Deploy Redis
+      kubernetes.core.k8s:
+        state: present
+        src: ../payment-service/k8s/redis.yaml
+        namespace: "{{ namespace }}"
+    
+    # ConfigMaps
+    - name: Deploy ConfigMaps
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+        namespace: "{{ namespace }}"
+      loop:
+        - ../auth-service/k8s/config.yaml
+        - ../restaurant-service/k8s/configmap.yaml
+        - ../order-service/k8s/configmap.yaml
+        - ../payment-service/k8s/configmap.yaml
+    
+    # Secrets
+    - name: Deploy Secrets
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+        namespace: "{{ namespace }}"
+      loop:
+        - ../auth-service/k8s/secret.yaml
+        - ../restaurant-service/k8s/secrets.yaml
+        - ../order-service/k8s/secrets.yaml
+        - ../payment-service/k8s/secrets.yaml
+    
+    # Deployments
+    - name: Deploy Microservices
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+        namespace: "{{ namespace }}"
+      loop:
+        - ../auth-service/k8s/deployment.yaml
+        - ../auth-service/k8s/service.yaml
+        - ../restaurant-service/k8s/deployment.yaml
+        - ../order-service/k8s/deployment.yaml
+        - ../payment-service/k8s/deployment.yaml
+    
+    # HPAs
+    - name: Deploy HPAs
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+        namespace: "{{ namespace }}"
+      loop:
+        - ../auth-service/k8s/hpa.yaml
+        - ../restaurant-service/k8s/hpa.yaml
+        - ../order-service/k8s/hpa.yaml
+        - ../payment-service/k8s/hpa.yaml
+    
+    - name: Wait for deployments to be ready
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ namespace }}"
+        name: "{{ item }}"
+      register: deployment_status
+      until: deployment_status.resources[0].status.availableReplicas | default(0) >= 1
+      retries: 30
+      delay: 10
+      loop:
+        - auth-deployment
+        - restaurant-service
+        - order-service
+        - payment-service
+    
+    - name: Display service URLs
+      debug:
+        msg: "Services deployed in namespace: {{ namespace }}"
+

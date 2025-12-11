@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: restaurant-service
-        image: restaurant-service:latest
+        image: sakethjooluri/restaurant-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3001
